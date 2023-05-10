@@ -1,0 +1,204 @@
+---
+title: "Project5_415"
+author: "Ahmed Abdou"
+date: "2023-03-028"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Summary of the Bath Soap Market Segmentation Project
+
+### Objective: 
+CRISA, an Asian market research agency, aims to segment the bath soap market based on purchase behavior and basis of purchase to help their clients, like IMRB, design cost-effective promotions, allocate promotion budgets efficiently, and design effective customer reward systems.
+Data: The dataset, BathSoap.csv, has 600 records of household data from over 100 cities and towns in India. The data includes demographics, affluence index, and purchase data of product categories and brands, as well as variables that measure aspects of brand loyalty.
+
+
+### Description of Variables:
+The dataset contains variables related to household demographics, purchase summary, and basis of purchase. Demographic variables include socioeconomic class, eating habits, native language, gender, age, education of the homemaker, household size, presence of children, television availability, and affluence index. Purchase summary variables encompass the number of brands purchased, brand runs, total volume, number of transactions, value, average transactions per brand run, and average volume per transaction.
+
+
+### Methodology: 
+The R code preprocesses the data, removes the Member ID variable, and scales the numeric columns. It defines variable groups for clustering and performs k-means clustering for purchase behavior, the basis of purchase, and both combined. The best segmentation (kmeans_combined) is chosen based on advertising and promotional campaigns. The data is split into training and validation sets, and two classification models are built: a decision tree model and a multinomial logistic regression model.
+
+### Results:
+Three clusters of households were identified based on the kmeans_combined segmentation. The logistic regression model had better accuracy than the decision tree model for classifying the data into the identified segments.
+
+### Conclusion:
+The project successfully segmented the bath soap market using k-means clustering. This segmentation can guide the development of advertising and promotional campaigns for CRISA's clients. The logistic regression model is more suitable for targeting direct-mail promotions.
+
+
+### Questions to Explore:
+1.	What is the relationship between socioeconomic status (SEC) and purchase behavior variables (No. of Brands, Brand Runs, Total Volume, etc.)?
+2.	How do eating habits (FEH) and native language (MT) affect the basis of purchase variables?
+
+
+
+
+```{r}
+library(tidyverse)
+library(cluster)
+library(nnet)
+library(caTools)
+library(caret)
+library(rpart)
+```
+
+```{r}
+bath_soap_data <- read_csv("BathSoapHousehold.csv")
+```
+
+Printing the first few observations:
+```{r}
+head(D)
+```
+
+removing the Member id variable:
+```{r}
+bath_soap_data <- bath_soap_data %>%
+  select(-1) %>%  # Remove the Member id column
+  mutate_if(is.numeric, scale)  # Scale numeric columns
+```
+
+Defining the variable groups for clustering:
+```{r}
+purchase_behavior_vars <- c("No. of Brands", "Brand Runs", "Total Volume", "No. of  Trans", "Value", "Trans / Brand Runs", "Vol/Tran", "Avg. Price")
+basis_of_purchase_vars <- c("Pur Vol No Promo - %", "Pur Vol Promo 6 %", "Pur Vol Other Promo %", "Pr Cat 1", "Pr Cat 2", "Pr Cat 3", "Pr Cat 4", "PropCat 5", "PropCat 6", "PropCat 7", "PropCat 8", "PropCat 9", "PropCat 10", "PropCat 11", "PropCat 12", "PropCat 13", "PropCat 14", "PropCat 15")
+```
+
+Performing k-means clustering for purchase behavior:
+```{r}
+set.seed(123) 
+kmeans_purchase_behavior <- kmeans(bath_soap_data[purchase_behavior_vars], centers = 3)
+bath_soap_data$cluster_purchase_behavior <- kmeans_purchase_behavior$cluster
+```
+
+Performing k-means clustering for basis of purchase:
+```{r}
+set.seed(123)  
+kmeans_basis_of_purchase <- kmeans(bath_soap_data[basis_of_purchase_vars], centers = 3)
+bath_soap_data$cluster_basis_of_purchase <- kmeans_basis_of_purchase$cluster
+```
+
+Performing k-means clustering for both purchase behavior and basis of purchase:
+```{r}
+combined_vars <- c(purchase_behavior_vars, basis_of_purchase_vars)
+set.seed(123)  
+kmeans_combined <- kmeans(bath_soap_data[combined_vars], centers = 3)
+bath_soap_data$cluster_combined <- kmeans_combined$cluster
+```
+
+View the results
+```{r}
+head(bath_soap_data)
+
+```
+
+getting the detailed information stored in kmeans_purchase_behavior:
+```{r}
+kmeans_purchase_behavior$cluster
+kmeans_purchase_behavior$centers
+kmeans_purchase_behavior$totss
+kmeans_purchase_behavior$withinss
+kmeans_purchase_behavior$tot.withinss
+kmeans_purchase_behavior$betweenss
+kmeans_purchase_behavior$size
+kmeans_purchase_behavior$iter
+
+```
+
+getting the detailed information stored in kmeans_purchase_purchase:
+```{r}
+kmeans_basis_of_purchase$cluster
+kmeans_basis_of_purchase$centers
+kmeans_basis_of_purchase$totss
+kmeans_basis_of_purchase$withinss
+kmeans_basis_of_purchase$tot.withinss
+kmeans_basis_of_purchase$betweenss
+kmeans_basis_of_purchase$size
+kmeans_basis_of_purchase$iter
+
+```
+
+getting the detailed information stored in kmeans_combined:
+```{r}
+kmeans_combined$cluster
+kmeans_combined$centers
+kmeans_combined$totss
+kmeans_combined$withinss
+kmeans_combined$tot.withinss
+kmeans_combined$betweenss
+kmeans_combined$size
+kmeans_combined$iter
+
+```
+
+
+**The kmeans_combined segmentation is the best choice for advertising and promotional campaigns as it includes both purchase behavior and basis of purchase data.**
+
+Cluster 1: Balanced purchase behavior, moderately price-sensitive. Target with general advertising campaigns.
+Cluster 2: Higher transactions, effective for promotional category 4. Focus on loyalty and targeted promotions.
+Cluster 3: Larger volumes, lower price point, and high responsiveness to promotional category 3. Target with volume discounts and category-specific promotions.
+
+
+creating segment variable based on the cluster results
+
+```{r}
+bath_soap_data$segment <- kmeans_combined$cluster
+
+```
+
+splitting the data into train and valid
+```{r}
+set.seed(123)  # Set a random seed for reproducibility
+split_index <- sample.split(bath_soap_data$segment, SplitRatio = 0.7)
+train_data <- subset(bath_soap_data, split_index == TRUE)
+valid_data <- subset(bath_soap_data, split_index == FALSE)
+```
+
+Fitting the classification tree model:
+```{r}
+# Fit the classification tree model
+tree_model <- rpart(segment ~ ., data = train_data, method = "class")
+
+
+predicted.label <- predict(tree_model, newdata = valid_data, type = "class")
+observed.label = valid_data$segment
+```
+
+confusion Matrix for the tree model:
+```{r}
+M.valid_tree <- confusionMatrix(factor(predicted.label), factor(observed.label))
+M.valid_tree
+
+```
+
+
+
+making and predicting a logistic regression model:
+```{r}
+model <- multinom(segment ~ ., data = train_data)
+
+predictions <- predict(model, newdata = valid_data)
+
+```
+
+
+Checking the accuracy
+```{r}
+confusion_matrix <- table(Predicted = predictions, Actual = valid_data$segment)
+confusion_matrix 
+
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+accuracy
+
+```
+
+
+For the classification models, the confusion matrix revealed that the logistic regression model had better accuracy than the decision tree model.
+
+
